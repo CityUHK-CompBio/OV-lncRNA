@@ -1,0 +1,44 @@
+---
+title: "Drug_sensitivity_analysis"
+author: "Jiang Li"
+output: html_document
+date: "2024-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Drug sensitivity analysis
+```{r}
+ctrp.sample.info<-data.table::fread('CTRP/Cell_line_annotation_ctrp.txt',data.table = F)
+ctrp.sample.info<-ctrp.sample.info[ctrp.sample.info$OncoTree1=='Ovary',]
+cell.line<-intersect(ctrp.sample.info$Name, colnames(ctrp.expr)) %>% intersect(colnames(ctrp.drug))
+ctrp.drug<-ctrp.drug[,cell.line]
+ctrp.expr<-ctrp.expr[,cell.line]
+ctrp.drug<-ctrp.drug[apply(ctrp.drug,1,function(x){sum(is.na(x)) < (length(cell.line)*0.5)}),]
+ctrp.drug<-impute::impute.knn(ctrp.drug %>% as.matrix())[['data']] %>% as.data.frame()
+ctrp.drug<- (1-ctrp.drug/30)
+
+drug.gene.df<-expand.grid(rownames(ctrp.expr), rownames(ctrp.drug)) %>% as.data.frame()
+colnames(drug.gene.df)<-c('gene','drug')
+drug.gene.df$anova.p<-NA
+drug.gene.df$auc<-NA
+drug.gene.df$gene <- as.character(drug.gene.df$gene)
+drug.gene.df$drug <- as.character(drug.gene.df$drug)
+
+
+for(i in 1:nrow(drug.gene.df)){
+  df<-data.frame(
+    gene=ctrp.expr[drug.gene.df$gene[i],] %>% unlist(),
+    drug=ctrp.drug[drug.gene.df$drug[i],] %>% unlist()
+  )
+  drug.gene.df$anova.p[i]<-anova(lm(drug~gene, df))[1,5]
+  drug.gene.df$auc[i]<-pROC::roc(
+    ifelse(df$drug > median(df$drug),1,0),
+    df$gene,quiet=T,direction='<'
+  )$auc
+}
+rm(i,df)
+```
+
