@@ -1,0 +1,82 @@
+---
+title: "Integrative_network_inference_and_master_regulator_analysis"
+author: "Jiang Li"
+output: html_document
+date: "2024-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DEG analysis for lncRNA & gene expression
+```{r}
+grp.mesenchymal<-if_else(ov.subtype$SUBTYPE == 'Mesenchymal', 1, 0)
+mesenchymal.limma<-lmFit(object = lnc.expr, design = model.matrix(~grp.mesenchymal)) %>%
+  eBayes() %>% topTable(coef = 2, number = Inf, adjust.method = 'BH')
+
+mRNA.limma<-lmFit(object = ov.expr, design = model.matrix(~grp.mesenchymal)) %>%
+  eBayes() %>% topTable(coef = 2, number = Inf, adjust.method = 'BH')
+
+mesenchymal.deg<-mesenchymal.limma %>% filter(adj.P.Val < 0.05 & abs(logFC) > 0.5) %>% rownames()
+sig.mRNA<-mRNA.limma %>% filter(adj.P.Val < 0.05 & abs(logFC) > 0.25) %>% rownames()
+```
+
+
+## master regulator of lncRNA
+```{r}
+data4enrich <- mRNA.limma$logFC
+names(data4enrich) <- rownames(mRNA.limma)
+dbemt2 <- read_delim("raw_data/dbemt2.txt", "\t", escape_double = FALSE, trim_ws = TRUE)
+dbemt2$ensembl<-mapIds(org.Hs.eg.db, keys = dbemt2$GeneSymbol, 
+                       keytype = 'SYMBOL', column = 'ENSEMBL')
+rtni <- tni.constructor(expData = lnc.expr[mesenchymal.deg,] %>% t() %>% scale() %>% t() %>% as.data.frame() %>% 
+                          bind_rows(
+                            ov.expr[sig.mRNA,] %>% t() %>% scale() %>% t() %>% as.data.frame()
+                          ) %>% as.matrix(), regulatoryElements = mesenchymal.deg) %>% 
+  tni.permutation(nPermutations = 1000) %>% tni.bootstrap() %>% tni.dpi.filter()
+rtna <- tni2tna.preprocess(object = rtni, phenotype = data4enrich, hits = dbemt2$ensembl) %>% 
+  tna.mra() %>% tna.get(what="mra", ntop = -1)
+```
+
+## Hypergeometric test significance and EMT percentage
+```{r}
+rtna %>% dplyr::select(Regulon,Regulon.Size,Observed.Hits,Adjusted.Pvalue) %>% 
+  dplyr::mutate(emt.percentage=Observed.Hits/Regulon.Size) %>% 
+  dplyr::mutate(Adjusted.Pvalue=-log10(Adjusted.Pvalue)) %>% 
+  dplyr::mutate(symbol=mapIds(org.Hs.eg.db, keys = Regulon, keytype = 'ENSEMBL', column = 'SYMBOL')) %>%
+  dplyr::mutate(symbol = ifelse(Adjusted.Pvalue >= 1.30103, symbol ,'')) %>% 
+  ggscatter(x = "emt.percentage", y = "Adjusted.Pvalue",color = 'Adjusted.Pvalue',size='emt.percentage',
+            label = "symbol", repel = TRUE,add.params=list(max.overlaps = 30))+
+  scale_color_continuous(low='blue', high='red')+
+  geom_hline(yintercept = -log10(0.05),lty='dashed',lwd=1.2)+geom_vline(xintercept = 0.2,lty='dashed',lwd=1.2)+
+  theme_classic()+labs(x='Percentage of EMT genes in regulons',y='-log10(P)', 
+                       color='-log10(P)',size='EMT genes (%)')+
+  theme(
+    axis.text= element_text(size=15,family ="sans"),
+    axis.title= element_text(size = 15,family ="sans")
+  )
+```
+
+## Network visualization using RedeR
+```{r}
+library(RedeR)
+rdp <- RedPort()
+calld(rdp)
+addGraph(rdp, g, layout=NULL)
+addLegend.color(rdp, g, type="edge")
+addLegend.shape(rdp, g)
+relax(rdp, ps = TRUE)
+
+## add legend: color
+addLegend.color(rdp, miRNA.cols, labvec=c("0", rep("",4),  rep("",4), "2"),
+                size=18, bend=0.5, type="node", vertical = F,
+                ftsize=12,
+                title="lncRNA expression", position="topright")
+addLegend.color(rdp, ge.cols, labvec=c("-1", rep("", 4),  rep("",4), "3"),
+                size=18, bend=0.5, type="edge", vertical = F,
+                position="topright", 
+                ftsize=12,
+                title="gene expression")
+```
+
