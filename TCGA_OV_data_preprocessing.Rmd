@@ -1,0 +1,70 @@
+---
+title: "TCGA_OV_data_preprocessing"
+author: "Jiang Li"
+output: html_document
+date: "2024-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+library(tidyverse)
+
+## survival data analysis
+```{r}
+ov.survival<-data.table::fread('raw_data/TCGA-OV.survival.tsv')
+ov.survival<-ov.survival[grepl('01A$', ov.survival$sample),]
+```
+
+
+## RNA-seq expression 
+```{r}
+ov.expr<-data.table::fread('raw_data/TCGA-OV.htseq_fpkm.tsv')
+ov.expr$Ensembl_ID<-sapply(ov.expr$Ensembl_ID, function(x){
+  unlist(str_split(x, '\\.'))[1]
+})
+sapply(colnames(ov.expr), function(x){unlist(str_split(x, '-'))[4]}) %>% table()
+
+ov.expr<-ov.expr %>% column_to_rownames('Ensembl_ID')
+#ov.normal.expr<-ov.expr[, grepl('11A$', colnames(ov.expr))]
+ov.expr<-ov.expr[, grepl('01A$', colnames(ov.expr))]
+fpkm2tpm <- function(fpkm){
+  tpm <- exp(log(fpkm) - log(sum(fpkm,na.rm=T)) + log(1e6))
+  tpm[which(is.na(tpm))] <- 0
+  return(tpm)
+}
+ov.expr <- 2^ov.expr - 1
+ov.expr <- apply(ov.expr, 2, fpkm2tpm)
+ov.expr <- log2(ov.expr + 1) %>% as.data.frame()
+```
+
+
+## Subtype information
+```{r}
+ov.subtype<-readxl::read_excel('raw_data/TCGA-OV_subtype.xls', skip=1)
+ov.subtype<-ov.subtype %>% filter(DATASET %in% c('TCGA-discovery','TCGA-validation') & 
+                                    SUBTYPE != 'NA') %>% dplyr::mutate(sample=paste0(ID,'-01A'))
+ov.subtype<-ov.subtype[,-c(27:30)]
+sample.name<-intersect(ov.survival$sample, colnames(ov.expr)) %>% intersect(ov.subtype$sample)
+```
+
+
+## Phenotype data and survival data process
+```{r}
+pheno.ov<-data.table::fread('raw_data/TCGA-OV.GDC_phenotype.tsv')
+pheno.ov<-pheno.ov %>% filter(submitter_id.samples %in% sample.name)
+pheno.ov<-pheno.ov[match(sample.name, pheno.ov$submitter_id.samples),]
+ov.survival<-ov.survival %>% filter(sample %in% sample.name)
+ov.survival<-ov.survival[match(sample.name, ov.survival$sample),]
+ov.expr<-ov.expr[, sample.name]
+ov.subtype<-ov.subtype %>% filter(sample %in% sample.name)
+ov.subtype<-ov.subtype[match(sample.name, ov.subtype$sample),]
+
+identical(colnames(ov.expr), ov.survival$sample)
+identical(colnames(ov.expr), pheno.ov$submitter_id.samples)
+identical(sample.name, ov.subtype$sample)
+identical(ov.survival$sample, ov.subtype$sample)
+rm(fpkm2tpm)
+```
+
