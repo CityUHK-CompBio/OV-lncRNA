@@ -1,0 +1,43 @@
+---
+title: "Pan_cancer_analysis_of_lncRNA"
+author: "Jiang Li"
+output: html_document
+date: "2024-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## PCC and univariate Cox 
+```{r}
+rm(list = ls())
+tcga.projects <- getGDCprojects()$project_id
+tcga.projects <- tcga.projects[str_detect(tcga.projects, 'TCGA')]
+final.res <- data.frame(
+  'Cancer_type' = tcga.projects, 'Corr' = NA, 'Corr.p'=NA,
+  'Uni.Cox.p.lncRNA' = NA, 'HR.lncRNA' = NA, 
+  'Uni.Cox.p.mRNA' = NA, 'HR.mRNA' = NA
+)
+
+for(i in 1:length(tcga.projects)){
+  print(paste0("Processing number ",i,",project name: ",tcga.projects[i]))
+  obj <- readRDS(paste0("expr_survival/", str_replace(tcga.projects[i], '-', '_'),".rds"))
+  df <- obj$Expr[c('ZFHX4-AS1','ZFHX4'),] %>% t() %>% as.data.frame() %>% rownames_to_column('sample')
+  df <- df %>% inner_join(obj$Survival, by='sample')
+  obj.cor <- broom::tidy(cor.test(df[['ZFHX4-AS1']], df[['ZFHX4']]))
+  df$lncRNA <- df$`ZFHX4-AS1`
+  obj.lncRNA.Cox <- broom::tidy(coxph(Surv(OS.time, OS) ~ lncRNA, data = df), exponentiate=T)
+  obj.mRNA.Cox <- broom::tidy(coxph(Surv(OS.time, OS) ~ ZFHX4, data = df), exponentiate=T)
+  final.res$Corr[i] <- obj.cor$estimate
+  final.res$Corr.p[i] <- obj.cor$p.value
+  
+  final.res$Uni.Cox.p.lncRNA[i] <- obj.lncRNA.Cox$p.value
+  final.res$HR.lncRNA[i] <- obj.lncRNA.Cox$estimate
+  
+  final.res$Uni.Cox.p.mRNA[i] <- obj.mRNA.Cox$p.value
+  final.res$HR.mRNA[i] <- obj.mRNA.Cox$estimate
+}
+rm(i, obj, df, obj.lncRNA.Cox, obj.mRNA.Cox, obj.cor)
+```
+
