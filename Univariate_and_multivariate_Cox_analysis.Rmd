@@ -1,0 +1,30 @@
+---
+title: "Univariate_and_multivariate_Cox_analysis"
+author: "Jiang Li"
+output: html_document
+date: "2024-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##  Cox analysis & KM plot of master regulator
+```{r}
+regulon<-rtna$Regulon[rtna$Adjusted.Pvalue < 0.05]
+tmp.lnc<-cbind(ov.survival, t(lnc.expr[regulon,]) %>% as.data.frame())
+lnc.os.uni<-lapply(regulon, function(x){
+  res.cox<-base::eval(parse(text = sprintf('coxph(Surv(OS.time.5, OS.5) ~ %s, data=tmp.lnc)',x)))
+  return(broom::tidy(res.cox, exponentiate=T, conf.int=T))
+})%>% do.call(rbind,.)
+lnc.os.uni$symbol<-mapIds(org.Hs.eg.db, keys = lnc.os.uni$term, keytype = 'ENSEMBL', column = 'SYMBOL')
+
+lapply(regulon, function(x){
+  res.cox<-base::eval(parse(text = sprintf('coxph(Surv(OS.time.5, OS.5) ~ %s, data=tmp.lnc)',x)))
+  return(res.cox)
+}) %>% forestmodel::forest_model(model_list = ., format_options = forestmodel::forest_model_format_options(banded=F),
+                              covariates = regulon, 
+                              merge_models = T)
+regulon<-lnc.os.uni$term[lnc.os.uni$p.value < 0.05]
+```
+
