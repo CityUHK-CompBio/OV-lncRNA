@@ -9,7 +9,7 @@ date: "2024-05-13"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-##  Cox analysis & KM plot of master regulator
+##  Cox analysis & KM plot of master regulators
 ```{r}
 regulon<-rtna$Regulon[rtna$Adjusted.Pvalue < 0.05]
 tmp.lnc<-cbind(ov.survival, t(lnc.expr[regulon,]) %>% as.data.frame())
