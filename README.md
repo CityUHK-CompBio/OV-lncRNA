@@ -16,9 +16,3 @@ We performed integrative network analysis to uncover the heterogeneity of lncRNA
 * TCGA_OV_data_preprocessing.Rmd: Code for the pre-processing of TCGA-OV dataset downloaded from [the University of California Santa Cruz (UCSC) Xena data portal](https://xenabrowser.net/datapages/).
 
 * Univariate_and_multivariate_Cox_analysis.Rmd: Code for uni-variate and multi-variate Cox analyzing and visualizing.   
-
-### 4. Author information
-Jiang Li†, Shuru Shen†, Xiang Li, Yijuan Wang, Y. Rebecca Chin*, Xin Wang*   
-
-†: These authors contributed equally.   
-*: Corresponding authors.   
