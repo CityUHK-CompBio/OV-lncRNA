@@ -23,7 +23,7 @@ sig.mRNA<-mRNA.limma %>% filter(adj.P.Val < 0.05 & abs(logFC) > 0.25) %>% rownam
 ```
 
 
-## master regulator of lncRNA
+## master regulators of lncRNA
 ```{r}
 data4enrich <- mRNA.limma$logFC
 names(data4enrich) <- rownames(mRNA.limma)
